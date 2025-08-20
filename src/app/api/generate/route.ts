@@ -1,32 +1,47 @@
-  import { NextResponse } from "next/server";
-  import axios from "axios";
+import { NextResponse, NextRequest } from "next/server";
+import axios from "axios";
 
-  export async function POST(req: Request) {
-    const { prompt } = await req.json();
+// Define request body type
+interface GenerateRequestBody {
+  prompt: string;
+}
 
-    try {
-      const response = await axios.post(
-        "https://thedeba-debai.hf.space/generate",
-        { text: prompt }, // matches your old script
-        { headers: { "Content-Type": "application/json" } }
-      );
+// Define response body type
+interface GenerateResponseBody {
+  reply: string;
+}
 
-      // Hugging Face returns generated_text as JSON string
-      let botReply = "⚠️ No response";
-      const rawText = response.data?.generated_text;
+export async function POST(req: NextRequest) {
+  try {
+    const { prompt } = (await req.json()) as GenerateRequestBody;
 
-      if (rawText) {
-        try {
-          const parsed = JSON.parse(rawText);
-          botReply = parsed.response || JSON.stringify(parsed);
-        } catch {
-          botReply = rawText;
-        }
+    const response = await axios.post(
+      "https://thedeba-debai.hf.space/generate",
+      { text: prompt },
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    let botReply = "⚠️ No response";
+    const rawText = response.data?.generated_text;
+
+    if (rawText) {
+      try {
+        const parsed = JSON.parse(rawText);
+        botReply = parsed.response || JSON.stringify(parsed);
+      } catch {
+        botReply = rawText;
       }
-
-      return NextResponse.json({ reply: botReply });
-    } catch (err: any) {
-      console.error(err);
-      return NextResponse.json({ reply: "❌ Error fetching response" }, { status: 500 });
     }
+
+    const result: GenerateResponseBody = { reply: botReply };
+    return NextResponse.json(result);
+  } catch (err: unknown) {
+    console.error(err);
+
+    // Type guard for unknown error
+    const message =
+      err instanceof Error ? err.message : "❌ Error fetching response";
+
+    return NextResponse.json({ reply: message }, { status: 500 });
   }
+}

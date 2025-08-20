@@ -12,6 +12,11 @@ interface Conversation {
   messages: Message[];
 }
 
+interface ApiResponse {
+  response?: string;
+  generated_text?: string;
+}
+
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<number | null>(null);
@@ -28,7 +33,7 @@ export default function Home() {
     throw new Error("NEXT_PUBLIC_API_URL is not defined in .env.local");
   }
 
-
+  // Load saved conversations
   useEffect(() => {
     const saved = localStorage.getItem("debai_conversations");
     if (saved) {
@@ -40,13 +45,14 @@ export default function Home() {
     }
   }, []);
 
+  // Save conversations to localStorage
   useEffect(() => {
     localStorage.setItem("debai_conversations", JSON.stringify(conversations));
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversations]);
 
   const createConversation = () => {
-    const conv = { id: Date.now(), messages: [] };
+    const conv: Conversation = { id: Date.now(), messages: [] };
     setConversations((prev) => [conv, ...prev]);
     setActiveConvId(conv.id);
   };
@@ -80,14 +86,14 @@ export default function Home() {
         signal: abortController.current.signal,
       });
 
-      const data = await res.json();
+      const data: ApiResponse = await res.json();
 
       let botMessage = data.response || "⚠️ No response";
       if (data.generated_text) {
         try {
           const parsed = JSON.parse(data.generated_text);
           botMessage = parsed.response || JSON.stringify(parsed);
-        } catch { }
+        } catch {}
       }
 
       // Smooth typing animation
@@ -114,7 +120,9 @@ export default function Home() {
       }, 30);
     } catch (err: unknown) {
       console.error(err);
-      if ((err as any).name === "AbortError") {
+
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // Stopped by user
         setConversations((prev) =>
           prev.map((c) => {
             if (c.id === activeConv.id) {
@@ -126,6 +134,7 @@ export default function Home() {
           })
         );
       } else {
+        // Other errors
         setConversations((prev) =>
           prev.map((c) => {
             if (c.id === activeConv.id) {
@@ -137,8 +146,7 @@ export default function Home() {
           })
         );
       }
-    }
-     finally {
+    } finally {
       setLoading(false);
       abortController.current = null;
     }
@@ -154,74 +162,50 @@ export default function Home() {
 
   return (
     <div
-      className={`${darkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-black"
-        } flex h-screen`}
+      className={`${darkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-black"} flex h-screen`}
     >
       {/* Sidebar */}
-      <div
-        className={`${sidebarOpen ? "w-72" : "w-16"
-          } transition-all duration-300 flex flex-col bg-gray-800 text-white`}
-      >
+      <div className={`${sidebarOpen ? "w-72" : "w-16"} transition-all duration-300 flex flex-col bg-gray-800 text-white`}>
         <div className="flex justify-between items-center p-2">
           {sidebarOpen && (
-            <button
-              className="px-2 py-1 bg-blue-500 rounded"
-              onClick={createConversation}
-            >
+            <button className="px-2 py-1 bg-blue-500 rounded" onClick={createConversation}>
               + New Chat
             </button>
           )}
           <div className="flex items-center gap-2">
             {sidebarOpen && (
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="px-2 py-1 border rounded text-sm"
-              >
+              <button onClick={() => setDarkMode(!darkMode)} className="px-2 py-1 border rounded text-sm">
                 {darkMode ? "Light" : "Dark"}
               </button>
             )}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="px-4 py-1 border rounded text-sm"
-            >
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="px-4 py-1 border rounded text-sm">
               ☰
             </button>
           </div>
         </div>
 
-        {/* Sidebar content */}
         <div className="flex-1 overflow-y-none flex flex-col items-center relative">
           {conversations.map((conv) => {
-            const title =
-              conv.messages.find((m) => m.role === "user")?.content.slice(0, 25) ||
-              "New Chat";
-
-            const previewMessages = conv.messages
-              .slice(-3)
+            const title = conv.messages.find((m) => m.role === "user")?.content.slice(0, 25) || "New Chat";
+            const previewMessages = conv.messages.slice(-3)
               .map((m) => `${m.role === "user" ? "You" : "AI"}: ${m.content}`)
               .join("\n");
 
             return sidebarOpen ? (
               <div
                 key={conv.id}
-                className={`p-2 rounded cursor-pointer mb-1 w-full ${conv.id === activeConvId ? "bg-blue-500 text-white" : "bg-gray-700"
-                  }`}
+                className={`p-2 rounded cursor-pointer mb-1 w-full ${conv.id === activeConvId ? "bg-blue-500 text-white" : "bg-gray-700"}`}
                 onClick={() => setActiveConvId(conv.id)}
               >
                 {title}
               </div>
             ) : (
-              <div
-                key={conv.id}
-                className="relative w-full flex justify-center group mb-2"
-              >
+              <div key={conv.id} className="relative w-full flex justify-center group mb-2">
                 <div
-                  className={`w-8 h-8 mt-3 rounded-full bg-gray-600 flex items-center justify-center cursor-pointer ${conv.id === activeConvId ? "ring-2 ring-blue-500" : ""
-                    }`}
+                  className={`w-8 h-8 mt-3 rounded-full bg-gray-600 flex items-center justify-center cursor-pointer ${conv.id === activeConvId ? "ring-2 ring-blue-500" : ""}`}
                   onClick={() => setActiveConvId(conv.id)}
                 >
-                  {conv.messages.find((m) => m.role === "user")?.content[0]?.toUpperCase() ||
-                    "N"}
+                  {conv.messages.find((m) => m.role === "user")?.content[0]?.toUpperCase() || "N"}
                 </div>
                 <div className="absolute left-12 top-0 hidden group-hover:block bg-gray-800 text-white p-2 rounded shadow-lg w-64 z-50 whitespace-pre-line">
                   {previewMessages || "No messages yet"}
@@ -242,26 +226,16 @@ export default function Home() {
           {activeConv?.messages.map((msg, idx) => (
             <div
               key={idx}
-              className={`flex items-start gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
+              className={`flex items-start gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${msg.role === "user" ? "" : "bg-gray-600"
-                  }`}
-              >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${msg.role === "user" ? "" : "bg-gray-600"}`}>
                 {msg.role === "user" ? "" : "AI"}
               </div>
-              <div
-                className={`px-4 py-2 rounded-2xl max-w-xs break-words ${msg.role === "user"
-                  ? "bg-blue-500 text-white rounded-br-none"
-                  : "bg-gray-700 text-white rounded-bl-none fade-in"
-                  }`}
-              >
+              <div className={`px-4 py-2 rounded-2xl max-w-xs break-words ${msg.role === "user" ? "bg-blue-500 text-white rounded-br-none" : "bg-gray-700 text-white rounded-bl-none fade-in"}`}>
                 {msg.content}
               </div>
             </div>
           ))}
-
           <div ref={bottomRef} />
         </div>
 
@@ -269,8 +243,8 @@ export default function Home() {
           <input
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
               if (e.key === "Enter" && !loading) sendMessage();
             }}
             placeholder="Type your message..."
@@ -279,8 +253,7 @@ export default function Home() {
           />
           <button
             onClick={loading ? stopMessage : sendMessage}
-            className={`px-4 py-2 rounded-2xl ${loading ? "bg-red-500" : "bg-blue-500"
-              } text-white`}
+            className={`px-4 py-2 rounded-2xl ${loading ? "bg-red-500" : "bg-blue-500"} text-white`}
           >
             {loading ? "Stop" : "Send"}
           </button>

@@ -22,7 +22,12 @@ export default function Home() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const abortController = useRef<AbortController | null>(null);
 
-  const API_URL = "https://thedeba-debai.hf.space/generate";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not defined in .env.local");
+  }
+
 
   useEffect(() => {
     const saved = localStorage.getItem("debai_conversations");
@@ -107,7 +112,7 @@ export default function Home() {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
         if (index > botMessage.length) clearInterval(typingInterval);
       }, 30);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
       if ((err as any).name === "AbortError") {
         setConversations((prev) =>
@@ -132,7 +137,8 @@ export default function Home() {
           })
         );
       }
-    } finally {
+    }
+     finally {
       setLoading(false);
       abortController.current = null;
     }
@@ -247,8 +253,8 @@ export default function Home() {
               </div>
               <div
                 className={`px-4 py-2 rounded-2xl max-w-xs break-words ${msg.role === "user"
-                    ? "bg-blue-500 text-white rounded-br-none"
-                    : "bg-gray-700 text-white rounded-bl-none fade-in"
+                  ? "bg-blue-500 text-white rounded-br-none"
+                  : "bg-gray-700 text-white rounded-bl-none fade-in"
                   }`}
               >
                 {msg.content}
